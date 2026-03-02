@@ -1,0 +1,712 @@
+<!-- templates/signup.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ t('signup_title', user_language) }} - {{ t('app_name', user_language) }}{% endblock %}
+
+{% block styles %}
+<style>
+    /* Loading spinner */
+    .spinner {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #16a34a;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Input validation styles */
+    .input-valid {
+      border-color: #16a34a !important;
+      box-shadow: 0 0 0 1px #16a34a !important;
+    }
+    
+    .input-invalid {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 1px #ef4444 !important;
+    }
+    
+    /* Custom scrollbar for selects */
+    select::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    select::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+    
+    select::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+    
+    select::-webkit-scrollbar-thumb:hover {
+      background: #a1a1a1;
+    }
+    
+    /* Transition effects */
+    .transition-all {
+      transition: all 0.2s ease-in-out;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-green-100 py-8 px-4">
+  <div class="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-8">
+    <!-- Logo and Title -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-full mb-4">
+        <i class="fas fa-leaf text-white text-2xl"></i>
+      </div>
+      <h2 class="text-3xl font-bold text-gray-800">{{ t('signup_title', user_language) }}</h2>
+      <p class="text-gray-600 mt-2">{{ t('signup_subtitle', user_language) }}</p>
+    </div>
+
+    <!-- Status Message Area -->
+    <div id="auth-message" class="mb-6 hidden"></div>
+
+    <form id="signup-form" novalidate>
+      <!-- 2-COLUMN GRID -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Left Column -->
+        <div class="space-y-5">
+          <!-- Username -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-user text-green-600 mr-2"></i>
+              {{ t('username_label', user_language) }}
+            </label>
+            <input type="text" id="signup-username" name="username" placeholder="{{ t('username_placeholder', user_language) }}"
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all text-base"
+                   required>
+            <div class="text-xs text-gray-500 mt-1 hidden" id="username-hint">{{ t('username_hint', user_language) }}</div>
+          </div>
+
+          <!-- Email -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-envelope text-green-600 mr-2"></i>
+              {{ t('email_label', user_language) }}
+            </label>
+            <input type="email" id="signup-email" name="email" placeholder="{{ t('email_placeholder', user_language) }}"
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all text-base"
+                   required>
+            <div class="text-xs text-gray-500 mt-1 hidden" id="email-hint">{{ t('email_hint', user_language) }}</div>
+          </div>
+
+          <!-- State -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-map-marker-alt text-green-600 mr-2"></i>
+              {{ t('state_label', user_language) }}
+            </label>
+            <select id="signup-state" name="state" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all appearance-none bg-white text-base"
+                    required>
+              <option value="">{{ t('select_state', user_language) }}</option>
+              <!-- States will be loaded from backend -->
+            </select>
+          </div>
+
+          <!-- Farm Size -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-ruler text-green-600 mr-2"></i>
+              {{ t('farm_size_label', user_language) }}
+            </label>
+            <select id="signup-farm-size" name="farm_size" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all appearance-none bg-white text-base"
+                    required>
+              <option value="">{{ t('select_farm_size', user_language) }}</option>
+              <option value="small">{{ t('farm_size_small', user_language) }}</option>
+              <option value="marginal">{{ t('farm_size_marginal', user_language) }}</option>
+              <option value="medium">{{ t('farm_size_medium', user_language) }}</option>
+              <option value="large">{{ t('farm_size_large', user_language) }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="space-y-5">
+          <!-- Password -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-lock text-green-600 mr-2"></i>
+              {{ t('password_label', user_language) }}
+            </label>
+            <div class="relative">
+              <input type="password" id="signup-password" name="password" placeholder="{{ t('password_placeholder', user_language) }}"
+                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all pr-12 text-base"
+                     required>
+              <button type="button" id="toggle-password" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 text-lg">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+            <div class="text-xs text-gray-500 mt-1 hidden" id="password-hint">{{ t('password_hint', user_language) }}</div>
+          </div>
+
+          <!-- Confirm Password -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-lock text-green-600 mr-2"></i>
+              {{ t('confirm_password_label', user_language) }}
+            </label>
+            <div class="relative">
+              <input type="password" id="signup-confirm-password" name="confirm-password" placeholder="{{ t('confirm_password_placeholder', user_language) }}"
+                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all pr-12 text-base"
+                     required>
+              <button type="button" id="toggle-confirm-password" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 text-lg">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- District -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-map-pin text-green-600 mr-2"></i>
+              {{ t('district_label', user_language) }}
+            </label>
+            <select id="signup-district" name="district" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all appearance-none bg-white text-base"
+                    disabled required>
+              <option value="">{{ t('select_district_first', user_language) }}</option>
+            </select>
+          </div>
+
+          <!-- Primary Crop -->
+          <div>
+            <label class="block text-gray-700 text-sm font-medium mb-2">
+              <i class="fas fa-seedling text-green-600 mr-2"></i>
+              {{ t('primary_crop_label', user_language) }}
+            </label>
+            <select id="signup-crop" name="primary_crop" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all appearance-none bg-white text-base"
+                    required>
+              <option value="">{{ t('select_crop', user_language) }}</option>
+              <optgroup label="{{ t('crop_category_cereals', user_language) }}">
+                <option>Rice</option>
+                <option>Wheat</option>
+                <option>Maize</option>
+                <option>Barley</option>
+                <option>Millets</option>
+              </optgroup>
+              <optgroup label="{{ t('crop_category_pulses', user_language) }}">
+                <option>Chickpea (Chana)</option>
+                <option>Pigeon Pea (Tur/Arhar)</option>
+                <option>Black Gram (Urad)</option>
+                <option>Green Gram (Moong)</option>
+              </optgroup>
+              <optgroup label="{{ t('crop_category_cash', user_language) }}">
+                <option>Cotton</option>
+                <option>Sugarcane</option>
+                <option>Jute</option>
+              </optgroup>
+              <optgroup label="{{ t('crop_category_vegetables', user_language) }}">
+                <option>Tomato</option>
+                <option>Potato</option>
+                <option>Onion</option>
+                <option>Brinjal (Eggplant)</option>
+              </optgroup>
+              <optgroup label="{{ t('crop_category_fruits', user_language) }}">
+                <option>Mango</option>
+                <option>Banana</option>
+                <option>Orange</option>
+                <option>Guava</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Button - Full Width -->
+      <div class="mt-8">
+        <button type="submit" id="signup-submit" class="w-full bg-green-600 text-white py-4 rounded-lg hover:bg-green-700 transition-all font-semibold text-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+          <span id="submit-text">{{ t('create_account_button', user_language) }}</span>
+          <div id="loading-spinner" class="hidden ml-3">
+            <div class="spinner"></div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Login Link -->
+      <div class="mt-6 text-center">
+        <p class="text-gray-600">
+          {{ t('already_have_account', user_language) }}
+          <a href="login.html" class="text-green-700 hover:underline font-semibold ml-1">{{ t('login_link', user_language) }}</a>
+        </p>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ========== TRANSLATIONS FOR JAVASCRIPT ==========
+    window.signupTranslations = {
+        creating_account: "{{ t('creating_account', user_language) }}",
+        create_account_button: "{{ t('create_account_button', user_language) }}",
+        username_required: "{{ t('username_required', user_language) }}",
+        username_invalid: "{{ t('username_invalid', user_language) }}",
+        email_required: "{{ t('email_required', user_language) }}",
+        email_invalid: "{{ t('email_invalid', user_language) }}",
+        password_required: "{{ t('password_required', user_language) }}",
+        password_length: "{{ t('password_length', user_language) }}",
+        confirm_required: "{{ t('confirm_required', user_language) }}",
+        passwords_mismatch: "{{ t('passwords_mismatch', user_language) }}",
+        state_required: "{{ t('state_required', user_language) }}",
+        district_required: "{{ t('district_required', user_language) }}",
+        farm_size_required: "{{ t('farm_size_required', user_language) }}",
+        crop_required: "{{ t('crop_required', user_language) }}",
+        signup_success: "{{ t('signup_success', user_language) }}",
+        signup_failed: "{{ t('signup_failed', user_language) }}",
+        network_error: "{{ t('network_error', user_language) }}",
+        select_state: "{{ t('select_state', user_language) }}",
+        select_district: "{{ t('select_district', user_language) }}"
+    };
+    
+    // ========== CONFIGURATION ==========
+    const API_BASE = 'http://localhost:5001';
+    
+    // ========== STATE MANAGEMENT ==========
+    let statesData = {};
+    
+    // ========== VALIDATION FUNCTIONS (SIMPLIFIED) ==========
+    function validateEmail(email) {
+      const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      return re.test(email);
+    }
+    
+    function validateUsername(username) {
+      const re = /^[a-zA-Z0-9_]{3,20}$/;
+      return re.test(username);
+    }
+    
+    // SIMPLIFIED PASSWORD VALIDATION - ANY PASSWORD ACCEPTED
+    function validatePassword(password) {
+      return password.length >= 1; // Any non-empty password
+    }
+    
+    // ========== UI HELPERS ==========
+    function showMessage(message, type = 'error') {
+      const messageDiv = document.getElementById('auth-message');
+      const colors = {
+        success: 'bg-green-100 border border-green-400 text-green-700',
+        error: 'bg-red-100 border border-red-400 text-red-700',
+        warning: 'bg-yellow-100 border border-yellow-400 text-yellow-700',
+        info: 'bg-blue-100 border border-blue-400 text-blue-700'
+      };
+      
+      messageDiv.innerHTML = `
+        <div class="p-4 rounded-lg ${colors[type]}">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} mr-3"></i>
+            </div>
+            <div class="text-sm">${message}</div>
+          </div>
+        </div>
+      `;
+      messageDiv.classList.remove('hidden');
+      
+      if (type === 'success') {
+        setTimeout(() => {
+          messageDiv.classList.add('hidden');
+        }, 5000);
+      }
+    }
+    
+    function clearMessage() {
+      document.getElementById('auth-message').classList.add('hidden');
+    }
+    
+    function markFieldValid(field) {
+      field.classList.remove('input-invalid');
+      field.classList.add('input-valid');
+    }
+    
+    function markFieldInvalid(field) {
+      field.classList.remove('input-valid');
+      field.classList.add('input-invalid');
+    }
+    
+    function clearFieldStatus(field) {
+      field.classList.remove('input-valid', 'input-invalid');
+    }
+    
+    // ========== LOAD STATES FROM BACKEND ==========
+    async function loadStates() {
+      try {
+        const response = await fetch(`${API_BASE}/states-districts.json`);
+        if (!response.ok) throw new Error('Failed to load states');
+        
+        statesData = await response.json();
+        const stateSelect = document.getElementById('signup-state');
+        
+        stateSelect.innerHTML = `<option value="">${window.signupTranslations.select_state}</option>`;
+        
+        const sortedStates = Object.keys(statesData).sort();
+        
+        sortedStates.forEach(state => {
+          const option = document.createElement('option');
+          option.value = state;
+          option.textContent = state;
+          stateSelect.appendChild(option);
+        });
+        
+      } catch (error) {
+        console.error('Error loading states:', error);
+        showMessage('Unable to load states data. Please refresh the page.', 'error');
+        loadFallbackStates();
+      }
+    }
+    
+    function loadFallbackStates() {
+      statesData = {
+        "Telangana": ["Hyderabad", "Warangal", "Karimnagar", "Khammam", "Nizamabad"],
+        "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool"],
+        "Karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangaluru", "Belagavi"],
+        "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad"],
+        "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"]
+      };
+      
+      const stateSelect = document.getElementById('signup-state');
+      stateSelect.innerHTML = `<option value="">${window.signupTranslations.select_state}</option>`;
+      
+      Object.keys(statesData).sort().forEach(state => {
+        const option = document.createElement('option');
+        option.value = state;
+        option.textContent = state;
+        stateSelect.appendChild(option);
+      });
+    }
+    
+    function populateDistricts(state) {
+      const districtSelect = document.getElementById('signup-district');
+      
+      if (!state || !statesData[state]) {
+        districtSelect.innerHTML = `<option value="">${window.signupTranslations.select_state}</option>`;
+        districtSelect.disabled = true;
+        clearFieldStatus(districtSelect);
+        return;
+      }
+      
+      districtSelect.innerHTML = `<option value="">${window.signupTranslations.select_district}</option>`;
+      
+      const sortedDistricts = [...statesData[state]].sort();
+      
+      sortedDistricts.forEach(district => {
+        const option = document.createElement('option');
+        option.value = district;
+        option.textContent = district;
+        districtSelect.appendChild(option);
+      });
+      
+      districtSelect.disabled = false;
+      clearFieldStatus(districtSelect);
+    }
+    
+    // ========== FORM SUBMISSION (EXACT SAME FUNCTIONALITY) ==========
+    document.getElementById('signup-form').addEventListener('submit', async function(event) {
+      event.preventDefault();
+      clearMessage();
+      
+      // Get form elements
+      const usernameEl = document.getElementById('signup-username');
+      const emailEl = document.getElementById('signup-email');
+      const passwordEl = document.getElementById('signup-password');
+      const confirmEl = document.getElementById('signup-confirm-password');
+      const stateEl = document.getElementById('signup-state');
+      const districtEl = document.getElementById('signup-district');
+      const farmEl = document.getElementById('signup-farm-size');
+      const cropEl = document.getElementById('signup-crop');
+      
+      const submitBtn = document.getElementById('signup-submit');
+      const submitText = document.getElementById('submit-text');
+      const spinner = document.getElementById('loading-spinner');
+      
+      // Clear all field status
+      [usernameEl, emailEl, passwordEl, confirmEl, stateEl, districtEl, farmEl, cropEl].forEach(clearFieldStatus);
+      
+      // Validate form (same logic, just simpler password)
+      let isValid = true;
+      const errors = [];
+      
+      if (!usernameEl.value.trim()) {
+        markFieldInvalid(usernameEl);
+        errors.push(window.signupTranslations.username_required);
+        isValid = false;
+      } else if (!validateUsername(usernameEl.value.trim())) {
+        markFieldInvalid(usernameEl);
+        errors.push(window.signupTranslations.username_invalid);
+        isValid = false;
+      } else {
+        markFieldValid(usernameEl);
+      }
+      
+      if (!emailEl.value.trim()) {
+        markFieldInvalid(emailEl);
+        errors.push(window.signupTranslations.email_required);
+        isValid = false;
+      } else if (!validateEmail(emailEl.value.trim())) {
+        markFieldInvalid(emailEl);
+        errors.push(window.signupTranslations.email_invalid);
+        isValid = false;
+      } else {
+        markFieldValid(emailEl);
+      }
+      
+      if (!passwordEl.value) {
+        markFieldInvalid(passwordEl);
+        errors.push(window.signupTranslations.password_required);
+        isValid = false;
+      } else if (!validatePassword(passwordEl.value)) {
+        markFieldInvalid(passwordEl);
+        errors.push(window.signupTranslations.password_length);
+        isValid = false;
+      } else {
+        markFieldValid(passwordEl);
+      }
+      
+      if (!confirmEl.value) {
+        markFieldInvalid(confirmEl);
+        errors.push(window.signupTranslations.confirm_required);
+        isValid = false;
+      } else if (passwordEl.value !== confirmEl.value) {
+        markFieldInvalid(passwordEl);
+        markFieldInvalid(confirmEl);
+        errors.push(window.signupTranslations.passwords_mismatch);
+        isValid = false;
+      } else {
+        markFieldValid(confirmEl);
+      }
+      
+      if (!stateEl.value) {
+        markFieldInvalid(stateEl);
+        errors.push(window.signupTranslations.state_required);
+        isValid = false;
+      } else {
+        markFieldValid(stateEl);
+      }
+      
+      if (!districtEl.value) {
+        markFieldInvalid(districtEl);
+        errors.push(window.signupTranslations.district_required);
+        isValid = false;
+      } else {
+        markFieldValid(districtEl);
+      }
+      
+      if (!farmEl.value) {
+        markFieldInvalid(farmEl);
+        errors.push(window.signupTranslations.farm_size_required);
+        isValid = false;
+      } else {
+        markFieldValid(farmEl);
+      }
+      
+      if (!cropEl.value) {
+        markFieldInvalid(cropEl);
+        errors.push(window.signupTranslations.crop_required);
+        isValid = false;
+      } else {
+        markFieldValid(cropEl);
+      }
+      
+      if (!isValid) {
+        showMessage(errors[0], 'error');
+        return;
+      }
+      
+      // Show loading state
+      submitBtn.disabled = true;
+      submitText.textContent = window.signupTranslations.creating_account;
+      spinner.classList.remove('hidden');
+      
+      try {
+        const formData = {
+          username: usernameEl.value.trim(),
+          email: emailEl.value.trim().toLowerCase(),
+          password: passwordEl.value,
+          state: stateEl.value,
+          district: districtEl.value,
+          farm_size: farmEl.value,
+          primary_crop: cropEl.value
+        };
+        
+        console.log('Sending signup request:', { ...formData, password: '***' });
+        
+        const response = await fetch(`${API_BASE}/signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(formData),
+          credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          localStorage.setItem('user-name', data.user.username);
+          localStorage.setItem('user-email', data.user.email);
+          localStorage.setItem('user-id', data.user.id);
+          localStorage.setItem('profile_completed', data.user.profile_completed || 'false');
+          localStorage.setItem('user_location', `${data.user.district || ''}, ${data.user.state || ''}`);
+          localStorage.setItem('primary_crop', data.user.primary_crop || '');
+          localStorage.setItem('farm_size', data.user.farm_size ? `${data.user.farm_size} acres` : '');
+          
+          showMessage(window.signupTranslations.signup_success, 'success');
+          
+          setTimeout(() => {
+            window.location.href = 'dashboard.html';
+          }, 1500);
+          
+        } else {
+          const errorMessage = data.message || window.signupTranslations.signup_failed;
+          showMessage(errorMessage, 'error');
+          
+          submitBtn.disabled = false;
+          submitText.textContent = window.signupTranslations.create_account_button;
+          spinner.classList.add('hidden');
+        }
+        
+      } catch (error) {
+        console.error('Signup error:', error);
+        showMessage(window.signupTranslations.network_error, 'error');
+        
+        submitBtn.disabled = false;
+        submitText.textContent = window.signupTranslations.create_account_button;
+        spinner.classList.add('hidden');
+      }
+    });
+    
+    // ========== REAL-TIME VALIDATION (SIMPLIFIED) ==========
+    document.getElementById('signup-username').addEventListener('input', function() {
+      const hint = document.getElementById('username-hint');
+      
+      if (!this.value.trim()) {
+        clearFieldStatus(this);
+        hint.classList.add('hidden');
+        return;
+      }
+      
+      if (validateUsername(this.value.trim())) {
+        markFieldValid(this);
+        hint.classList.add('hidden');
+      } else {
+        markFieldInvalid(this);
+        hint.classList.remove('hidden');
+      }
+    });
+    
+    document.getElementById('signup-email').addEventListener('input', function() {
+      if (!this.value.trim()) {
+        clearFieldStatus(this);
+        return;
+      }
+      
+      if (validateEmail(this.value.trim())) {
+        markFieldValid(this);
+      } else {
+        markFieldInvalid(this);
+      }
+    });
+    
+    document.getElementById('signup-password').addEventListener('input', function() {
+      const hint = document.getElementById('password-hint');
+      
+      if (!this.value) {
+        clearFieldStatus(this);
+        hint.classList.add('hidden');
+        return;
+      }
+      
+      // SIMPLIFIED - just check if not empty
+      if (this.value.length >= 1) {
+        markFieldValid(this);
+        hint.classList.add('hidden');
+      } else {
+        markFieldInvalid(this);
+        hint.classList.remove('hidden');
+      }
+    });
+    
+    document.getElementById('signup-confirm-password').addEventListener('input', function() {
+      const password = document.getElementById('signup-password').value;
+      
+      if (!this.value) {
+        clearFieldStatus(this);
+        return;
+      }
+      
+      if (password === this.value) {
+        markFieldValid(this);
+        clearMessage();
+      } else {
+        markFieldInvalid(this);
+      }
+    });
+    
+    document.getElementById('signup-state').addEventListener('change', function() {
+      populateDistricts(this.value);
+      clearFieldStatus(this);
+    });
+    
+    document.getElementById('signup-district').addEventListener('change', function() {
+      clearFieldStatus(this);
+    });
+    
+    document.getElementById('signup-farm-size').addEventListener('change', function() {
+      clearFieldStatus(this);
+    });
+    
+    document.getElementById('signup-crop').addEventListener('change', function() {
+      clearFieldStatus(this);
+    });
+    
+    // ========== PASSWORD VISIBILITY TOGGLE ==========
+    function setupPasswordToggle(passwordFieldId, toggleButtonId) {
+      const passwordField = document.getElementById(passwordFieldId);
+      const toggleButton = document.getElementById(toggleButtonId);
+      
+      toggleButton.addEventListener('click', function() {
+        const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordField.setAttribute('type', type);
+        
+        const icon = this.querySelector('i');
+        if (type === 'password') {
+          icon.className = 'fas fa-eye';
+        } else {
+          icon.className = 'fas fa-eye-slash';
+        }
+      });
+    }
+    
+    // ========== INITIALIZATION ==========
+    document.addEventListener('DOMContentLoaded', function() {
+      loadStates();
+      
+      setupPasswordToggle('signup-password', 'toggle-password');
+      setupPasswordToggle('signup-confirm-password', 'toggle-confirm-password');
+      
+      console.log('Signup page loaded. Backend:', API_BASE);
+    });
+    
+    // ========== GLOBAL FUNCTIONS ==========
+    window.validateEmail = validateEmail;
+    window.validateUsername = validateUsername;
+    window.validatePassword = validatePassword;
+    
+</script>
+{% endblock %}

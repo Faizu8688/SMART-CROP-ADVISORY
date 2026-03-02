@@ -1,0 +1,1375 @@
+<!-- templates/weather.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ t('weather_page_title', user_language) }} - {{ t('app_name', user_language) }}{% endblock %}
+
+{% block styles %}
+<style>
+    :root {
+        --leaf-green: #16a34a;
+        --fresh-green: #22c55e;
+        --sky-blue: #0ea5e9;
+        --water-blue: #3b82f6;
+        --sun-yellow: #eab308;
+    }
+    
+    .bg-leaf { background-color: var(--leaf-green); }
+    .bg-sky { background-color: var(--sky-blue); }
+    .bg-sun { background-color: var(--sun-yellow); }
+    
+    .text-leaf { color: var(--leaf-green); }
+    .text-sky { color: var(--sky-blue); }
+    .text-sun { color: var(--sun-yellow); }
+    
+    .card-shadow {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    .transition-smooth {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .alert-danger { background-color: #fef2f2; border-left-color: #dc2626; }
+    .alert-warning { background-color: #fffbeb; border-left-color: #d97706; }
+    .alert-info { background-color: #eff6ff; border-left-color: #2563eb; }
+    .alert-success { background-color: #f0fdf4; border-left-color: #16a34a; }
+    
+    @keyframes slide-up {
+        from { transform: translateY(100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .animate-slide-up {
+        animation: slide-up 0.3s ease-out;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="bg-white border-b border-gray-200 px-4 py-3 md:px-6 md:py-4">
+    <div class="flex items-center justify-between">
+        <a href="dashboard.html" class="flex items-center text-gray-700 hover:text-leaf transition-smooth">
+            <i class="fas fa-arrow-left mr-2"></i>
+            <span class="hidden sm:inline">{{ t('dashboard', user_language) }}</span>
+        </a>
+        
+        <div class="text-center">
+            <h1 class="text-lg md:text-xl font-bold text-gray-800 flex items-center justify-center">
+                <i class="fas fa-cloud-sun text-sky mr-2"></i>
+                {{ t('weather_page_title', user_language) }}
+            </h1>
+            <p id="pageLocation" class="text-xs md:text-sm text-gray-600 mt-1">{{ t('loading', user_language) }}</p>
+        </div>
+        
+        <button onclick="refreshWeatherPage()" class="flex items-center text-gray-700 hover:text-leaf transition-smooth" id="refreshPageBtn">
+            <i class="fas fa-sync-alt mr-2"></i>
+            <span class="hidden sm:inline">{{ t('refresh', user_language) }}</span>
+        </button>
+    </div>
+</header>
+
+<div id="loadingState" class="text-center py-12">
+    <i class="fas fa-cloud-sun fa-spin text-4xl text-leaf mb-4"></i>
+    <p class="text-gray-600">{{ t('loading_weather', user_language) }}</p>
+</div>
+
+<div id="errorState" class="hidden text-center py-12 px-4">
+    <i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i>
+    <p class="text-gray-800 font-medium mb-2">{{ t('weather_error_title', user_language) }}</p>
+    <p class="text-gray-600 text-sm mb-4">{{ t('weather_error_message', user_language) }}</p>
+    <button onclick="retryLoading()" class="px-4 py-2 bg-leaf text-white rounded-lg hover:bg-green-700 transition-smooth">
+        {{ t('try_again', user_language) }}
+    </button>
+</div>
+
+<div id="locationPrompt" class="hidden p-4 md:p-6 max-w-6xl mx-auto text-center py-12">
+    <i class="fas fa-map-marker-alt text-4xl text-sky mb-4"></i>
+    <h2 class="text-xl font-bold text-gray-800 mb-2">{{ t('location_required_title', user_language) }}</h2>
+    <p class="text-gray-600 mb-6">{{ t('location_required_message', user_language) }}</p>
+    <button onclick="goToDashboard()" class="px-6 py-3 bg-leaf text-white rounded-lg hover:bg-green-700 transition-smooth">
+        {{ t('go_to_dashboard', user_language) }}
+    </button>
+</div>
+
+<main id="mainContent" class="hidden p-4 md:p-6 max-w-6xl mx-auto">
+    
+    <div class="bg-white border border-gray-200 rounded-xl p-4 md:p-6 card-shadow mb-6">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between mb-6">
+            <div class="mb-4 md:mb-0 md:flex-1">
+                <div class="flex items-center mb-2">
+                    <i class="fas fa-map-marker-alt text-sky mr-2"></i>
+                    <h2 id="currentLocation" class="text-xl font-bold text-gray-800">--</h2>
+                </div>
+                <div id="currentCondition" class="flex items-center text-gray-600">
+                    <i class="fas fa-sun text-sun text-lg mr-2"></i>
+                    <span>--</span>
+                </div>
+            </div>
+            
+            <div class="text-center md:text-right">
+                <div id="currentTemp" class="text-4xl md:text-5xl font-bold text-gray-800">--°C</div>
+                <p id="feelsLike" class="text-gray-600 text-sm mt-1">{{ t('feels_like', user_language) }} --°C</p>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 pt-4 border-t border-gray-100">
+            <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <div class="text-sky text-lg mb-1"><i class="fas fa-tint"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('humidity', user_language) }}</div>
+                <div id="currentHumidity" class="font-medium text-gray-800">--%</div>
+            </div>
+            
+            <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <div class="text-sky text-lg mb-1"><i class="fas fa-wind"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('wind_speed', user_language) }}</div>
+                <div id="currentWind" class="font-medium text-gray-800">-- km/h</div>
+            </div>
+            
+            <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <div class="text-sun text-lg mb-1"><i class="fas fa-sunrise"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('sunrise', user_language) }}</div>
+                <div id="sunriseTime" class="font-medium text-gray-800">--:--</div>
+            </div>
+            
+            <div class="text-center p-3 bg-gray-50 rounded-lg">
+                <div class="text-sun text-lg mb-1"><i class="fas fa-sunset"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('sunset', user_language) }}</div>
+                <div id="sunsetTime" class="font-medium text-gray-800">--:--</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sectionAlerts" class="mb-6">
+        <div id="criticalAlert" class="hidden mb-4 rounded-lg p-4 border-l-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i id="alertIcon" class="text-xl mr-3"></i>
+                </div>
+                <div class="flex-1">
+                    <h3 id="alertTitle" class="font-bold text-lg mb-1"></h3>
+                    <p id="alertMessage" class="text-gray-700"></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-green-50 border border-green-200 rounded-xl p-4 card-shadow">
+                <div class="flex items-center mb-3">
+                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-check text-green-600"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-800">{{ t('good_for', user_language) }}</h3>
+                </div>
+                <p id="goodFor" class="text-gray-700">--</p>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 card-shadow">
+                <div class="flex items-center mb-3">
+                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-clock text-blue-600"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-800">{{ t('best_time', user_language) }}</h3>
+                </div>
+                <p id="bestTime" class="text-gray-700">--</p>
+            </div>
+            
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 card-shadow">
+                <div class="flex items-center mb-3">
+                    <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-times text-red-600"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-800">{{ t('avoid', user_language) }}</h3>
+                </div>
+                <p id="avoidAction" class="text-gray-700">--</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 md:p-6 card-shadow mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-800">{{ t('hourly_forecast', user_language) }}</h3>
+            <div class="text-xs text-gray-500">{{ t('every_4_hours', user_language) }}</div>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('time', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('temp', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('rain', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('wind', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('farm_advice', user_language) }}</th>
+                    </tr>
+                </thead>
+                <tbody id="hourlyForecast" class="divide-y divide-gray-200">
+                    <tr><td colspan="5" class="py-8 text-center text-gray-400">{{ t('loading', user_language) }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 md:p-6 card-shadow mb-6">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">{{ t('weekly_forecast', user_language) }}</h3>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('day', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('high_low', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('rain', user_language) }}</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('farming_activity', user_language) }}</th>
+                    </tr>
+                </thead>
+                <tbody id="weeklyForecast" class="divide-y divide-gray-200">
+                    <tr><td colspan="4" class="py-8 text-center text-gray-400">{{ t('loading', user_language) }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 md:p-6 card-shadow mb-6">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">{{ t('agricultural_metrics', user_language) }}</h3>
+        
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-leaf text-xl mb-2"><i class="fas fa-seedling"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('soil_temperature', user_language) }}</div>
+                <div id="soilTemp" class="text-xl font-bold text-gray-800">--°C</div>
+                <div class="text-xs text-gray-400">{{ t('at_depth', user_language) }}</div>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-sky text-xl mb-2"><i class="fas fa-tint"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('evapotranspiration', user_language) }}</div>
+                <div id="evapotranspiration" class="text-xl font-bold text-gray-800">-- mm/day</div>
+                <div class="text-xs text-gray-400">{{ t('water_loss', user_language) }}</div>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-sun text-xl mb-2"><i class="fas fa-sun"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('sunshine_hours', user_language) }}</div>
+                <div id="sunshineHours" class="text-xl font-bold text-gray-800">-- hours</div>
+                <div class="text-xs text-gray-400">{{ t('today', user_language) }}</div>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-leaf text-xl mb-2"><i class="fas fa-chart-line"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('gdd_accumulated', user_language) }}</div>
+                <div id="gddAccumulated" class="text-xl font-bold text-gray-800">--</div>
+                <div class="text-xs text-gray-400">{{ t('growing_degree_days', user_language) }}</div>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-sky text-xl mb-2"><i class="fas fa-thermometer"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('min_temperature', user_language) }}</div>
+                <div id="minTemp" class="text-xl font-bold text-gray-800">--°C</div>
+                <div class="text-xs text-gray-400">{{ t('overnight_low', user_language) }}</div>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-sun text-xl mb-2"><i class="fas fa-bug"></i></div>
+                <div class="text-xs text-gray-500 mb-1">{{ t('pest_disease_risk', user_language) }}</div>
+                <div id="pestRisk" class="text-xl font-bold text-gray-800">--</div>
+                <div class="text-xs text-gray-400">{{ t('risk_level', user_language) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 md:p-6 card-shadow mb-6">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">{{ t('quick_actions', user_language) }}</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button onclick="showIrrigationModal()" class="bg-white border-2 border-leaf rounded-xl p-4 text-center hover:bg-green-50 transition-smooth group">
+                <div class="text-leaf text-3xl mb-3 group-hover:scale-110 transition-smooth">
+                    <i class="fas fa-tint"></i>
+                </div>
+                <div class="font-bold text-gray-800 mb-1">{{ t('set_irrigation_reminder', user_language) }}</div>
+                <div class="text-xs text-gray-500">{{ t('smart_watering_schedule', user_language) }}</div>
+            </button>
+            
+            <button onclick="askChatbotAboutWeather()" class="bg-white border-2 border-sky rounded-xl p-4 text-center hover:bg-blue-50 transition-smooth group">
+                <div class="text-sky text-3xl mb-3 group-hover:scale-110 transition-smooth">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="font-bold text-gray-800 mb-1">{{ t('ask_chatbot', user_language) }}</div>
+                <div class="text-xs text-gray-500">{{ t('personalized_weather_advice', user_language) }}</div>
+            </button>
+            
+            <button onclick="showPlantingCalendar()" class="bg-white border-2 border-sun rounded-xl p-4 text-center hover:bg-yellow-50 transition-smooth group">
+                <div class="text-sun text-3xl mb-3 group-hover:scale-110 transition-smooth">
+                    <i class="fas fa-seedling"></i>
+                </div>
+                <div class="font-bold text-gray-800 mb-1">{{ t('view_planting_calendar', user_language) }}</div>
+                <div class="text-xs text-gray-500">{{ t('seasonal_farming_schedule', user_language) }}</div>
+            </button>
+        </div>
+    </div>
+
+    <div class="text-center text-xs text-gray-500 mt-8 pb-4">
+        <i class="fas fa-clock mr-1"></i>
+        {{ t('last_updated', user_language) }}: <span id="lastUpdated">--</span>
+    </div>
+</main>
+
+<div id="irrigationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-md w-full card-shadow">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800">{{ t('irrigation_recommendation', user_language) }}</h2>
+                <button onclick="hideModal('irrigationModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="irrigationContent">
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-3xl text-leaf mb-4"></i>
+                    <p class="text-gray-600">{{ t('calculating_irrigation', user_language) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="calendarModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-md w-full card-shadow">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800">{{ t('planting_calendar', user_language) }}</h2>
+                <button onclick="hideModal('calendarModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="calendarContent">
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-3xl text-leaf mb-4"></i>
+                    <p class="text-gray-600">{{ t('loading_calendar', user_language) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ========== GLOBAL VARIABLES ==========
+    let weatherDataCache = null;
+    let currentUserData = null;
+    const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+    
+    // ========== TRANSLATIONS FOR JAVASCRIPT ==========
+    window.weatherTranslations = {
+        feels_like: "{{ t('feels_like', user_language) }}",
+        today: "{{ t('today', user_language) }}",
+        tomorrow: "{{ t('tomorrow', user_language) }}",
+        delay_field_work: "{{ t('delay_field_work', user_language) }}",
+        irrigate_crops: "{{ t('irrigate_crops', user_language) }}",
+        protect_crops: "{{ t('protect_crops', user_language) }}",
+        spraying_pesticides: "{{ t('spraying_pesticides', user_language) }}",
+        field_maintenance: "{{ t('field_maintenance', user_language) }}",
+        harvesting: "{{ t('harvesting', user_language) }}",
+        soil_preparation: "{{ t('soil_preparation', user_language) }}",
+        risk_high: "{{ t('risk_high', user_language) }}",
+        risk_medium: "{{ t('risk_medium', user_language) }}",
+        risk_low: "{{ t('risk_low', user_language) }}",
+        irrigate_today: "{{ t('irrigate_today', user_language) }}",
+        irrigate_within_2_days: "{{ t('irrigate_within_2_days', user_language) }}",
+        no_urgent_irrigation: "{{ t('no_urgent_irrigation', user_language) }}",
+        reminder_set: "{{ t('reminder_set', user_language) }}",
+        
+        // Weather conditions
+        condition_clear_sky: "{{ t('condition_clear_sky', user_language) }}",
+        condition_mainly_clear: "{{ t('condition_mainly_clear', user_language) }}",
+        condition_partly_cloudy: "{{ t('condition_partly_cloudy', user_language) }}",
+        condition_overcast: "{{ t('condition_overcast', user_language) }}",
+        condition_foggy: "{{ t('condition_foggy', user_language) }}",
+        condition_rainy: "{{ t('condition_rainy', user_language) }}",
+        condition_rain_showers: "{{ t('condition_rain_showers', user_language) }}",
+        condition_thunderstorm: "{{ t('condition_thunderstorm', user_language) }}",
+        condition_snowy: "{{ t('condition_snowy', user_language) }}",
+        condition_unknown: "{{ t('condition_unknown', user_language) }}",
+        
+        // Alert titles
+        critical_alert: "{{ t('critical_alert', user_language) }}",
+        warning: "{{ t('warning', user_language) }}",
+        information: "{{ t('information', user_language) }}",
+        good_news: "{{ t('good_news', user_language) }}",
+        
+        // Days
+        days: ["{{ t('today', user_language) }}", "{{ t('tomorrow', user_language) }}", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    };
+
+    // ========== INITIALIZATION ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        loadWeatherPage();
+    });
+
+    // ========== MAIN WEATHER PAGE LOADER ==========
+    async function loadWeatherPage() {
+        showLoadingState();
+        
+        try {
+            // FIXED: Authentication check - check multiple possible keys
+            const isLoggedIn = localStorage.getItem('is-logged-in') === 'true' || 
+                              localStorage.getItem('user-id') !== null ||
+                              localStorage.getItem('user_name') !== null ||
+                              localStorage.getItem('user-name') !== null ||
+                              localStorage.getItem('user_id') !== null;
+            
+            if (!isLoggedIn) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            console.log('✅ User is logged in, checking localStorage...');
+
+            // FIXED: Get user data with proper fallbacks
+            const userData = getUserDataFromLocalStorage();
+            
+            if (!userData || !userData.location) {
+                console.warn('No user location found in localStorage');
+                showLocationPrompt();
+                return;
+            }
+
+            console.log('✅ User data from localStorage:', userData);
+
+            // FIXED: Get coordinates with improved fallback
+            const userCoords = getCoordinatesForUser(userData);
+            
+            if (!userCoords) {
+                console.warn('Could not get coordinates for user');
+                showLocationPrompt();
+                return;
+            }
+
+            console.log('✅ Using coordinates:', userCoords);
+
+            // FIXED: Store user data with guaranteed ID
+            const userId = userData.userId || 
+                          userData.username || 
+                          userData.location.replace(/[^a-zA-Z0-9]/g, '_') || 
+                          'anonymous';
+            
+            currentUserData = {
+                id: userId,
+                location: userData.location || 'Your Farm',
+                coords: userCoords,
+                crop: userData.crop || 'General crops',
+                username: userData.username || 'Farmer',
+                state: userData.state,
+                district: userData.district
+            };
+
+            // Update UI
+            document.getElementById('pageLocation').textContent = currentUserData.location;
+            document.getElementById('currentLocation').textContent = currentUserData.location;
+
+            // FIXED: Check cache with safe key
+            const cacheKey = `weather_cache_${currentUserData.id}`;
+            const cached = localStorage.getItem(cacheKey);
+            
+            if (cached) {
+                try {
+                    const { data, timestamp } = JSON.parse(cached);
+                    if (Date.now() - timestamp < CACHE_DURATION) {
+                        weatherDataCache = data;
+                        updateAllSections(data);
+                        showMainContent();
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse cache');
+                }
+            }
+
+            // Fetch fresh weather data
+            await fetchWeatherData(userCoords, currentUserData.location, currentUserData.crop);
+            
+        } catch (error) {
+            console.error('Error loading weather page:', error);
+            showErrorState();
+        }
+    }
+
+    // ========== FIXED: GET USER DATA FROM LOCALSTORAGE ==========
+    function getUserDataFromLocalStorage() {
+        console.log('🔍 Checking localStorage for user data...');
+        
+        // FIXED: Check ALL possible keys from dashboard
+        const userData = {
+            username: localStorage.getItem('user-name') || 
+                      localStorage.getItem('user_name') || 
+                      localStorage.getItem('username') || 'Farmer',
+            userId: localStorage.getItem('user-id') || 
+                    localStorage.getItem('userId') || 
+                    localStorage.getItem('user_id') || 
+                    localStorage.getItem('user-name') || 
+                    'local_user',
+            userEmail: localStorage.getItem('user-email') || 
+                      localStorage.getItem('email'),
+            location: localStorage.getItem('user_location'),
+            crop: localStorage.getItem('primary_crop') || 
+                  localStorage.getItem('crop') || 
+                  'General crops',
+            farmSize: localStorage.getItem('farm_size')
+        };
+        
+        // FIXED: Parse location properly - handle multiple commas
+        if (userData.location) {
+            const locationParts = userData.location.split(',').map(s => s.trim());
+            if (locationParts.length >= 2) {
+                userData.district = locationParts[0];
+                userData.state = locationParts.slice(1).join(', '); // Handle "East Godavari, Andhra Pradesh"
+            } else {
+                userData.district = locationParts[0];
+                userData.state = 'Unknown State';
+            }
+        }
+        
+        console.log('📋 Parsed user data:', userData);
+        
+        // Return user data if we have location
+        if (userData.location) {
+            return userData;
+        }
+        
+        return null;
+    }
+
+    // ========== FIXED: GET COORDINATES FOR USER ==========
+    function getCoordinatesForUser(userData) {
+        // Try to get coordinates from localStorage first
+        const storedLat = localStorage.getItem('latitude');
+        const storedLon = localStorage.getItem('longitude');
+        
+        if (storedLat && storedLon) {
+            return {
+                lat: parseFloat(storedLat),
+                lon: parseFloat(storedLon)
+            };
+        }
+        
+        // If no stored coordinates, use state/district
+        if (userData.state && userData.district) {
+            console.log(`📍 Getting coordinates for ${userData.district}, ${userData.state}`);
+            return getDefaultCoordinates(userData.state, userData.district);
+        }
+        
+        // If we have location string but can't parse
+        if (userData.location) {
+            console.log(`📍 Using default coordinates for ${userData.location}`);
+            return getDefaultCoordinatesByLocation(userData.location);
+        }
+        
+        return null;
+    }
+
+    // ========== GET DEFAULT COORDINATES ==========
+    function getDefaultCoordinates(state, district) {
+        const locationCoordinates = {
+            'Telangana': {
+                'Jogulamba Gadwal': { lat: 16.2300, lon: 77.8000 },
+                'Hyderabad': { lat: 17.3850, lon: 78.4867 },
+                'Warangal': { lat: 17.9689, lon: 79.5941 },
+                'Karimnagar': { lat: 18.4386, lon: 79.1288 },
+                'default': { lat: 17.1232, lon: 79.2088 }
+            },
+            'Andhra Pradesh': {
+                'Visakhapatnam': { lat: 17.6868, lon: 83.2185 },
+                'Vijayawada': { lat: 16.5062, lon: 80.6480 },
+                'Guntur': { lat: 16.3067, lon: 80.4365 },
+                'default': { lat: 15.9129, lon: 79.7400 }
+            },
+            'Karnataka': {
+                'Bengaluru': { lat: 12.9716, lon: 77.5946 },
+                'Mysuru': { lat: 12.2958, lon: 76.6394 },
+                'Hubli': { lat: 15.3647, lon: 75.1240 },
+                'default': { lat: 15.3173, lon: 75.7139 }
+            },
+            'default': { lat: 20.5937, lon: 78.9629 }
+        };
+        
+        if (locationCoordinates[state] && locationCoordinates[state][district]) {
+            return locationCoordinates[state][district];
+        }
+        
+        if (locationCoordinates[state] && locationCoordinates[state]['default']) {
+            return locationCoordinates[state]['default'];
+        }
+        
+        return locationCoordinates['default'];
+    }
+
+    function getDefaultCoordinatesByLocation(location) {
+        return { lat: 20.5937, lon: 78.9629 };
+    }
+
+    // ========== FETCH WEATHER DATA ==========
+    async function fetchWeatherData(coords, location, userCrop) {
+        try {
+            console.log('🌤️ Fetching weather for:', coords);
+            
+            const openMeteoData = await fetchOpenMeteoData(coords.lat, coords.lon);
+            
+            // FIXED: Call real LLM endpoint for weather insights
+            let llmInsights = null;
+            try {
+                const response = await authFetch('/api/weather-insights', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        location: location,
+                        crop: userCrop,
+                        weather_data: {
+                            current: openMeteoData.current,
+                            daily: openMeteoData.daily,
+                            hourly: openMeteoData.hourly
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    llmInsights = data.insights;
+                }
+            } catch (llmError) {
+                console.warn('LLM insights failed, using fallback:', llmError);
+                llmInsights = generateFallbackInsights(openMeteoData, location, userCrop);
+            }
+            
+            const completeData = {
+                openMeteo: openMeteoData,
+                llmInsights: llmInsights,
+                timestamp: Date.now()
+            };
+            
+            // Cache the data
+            if (currentUserData && currentUserData.id) {
+                const cacheKey = `weather_cache_${currentUserData.id}`;
+                localStorage.setItem(cacheKey, JSON.stringify({
+                    data: completeData,
+                    timestamp: Date.now()
+                }));
+            }
+            
+            weatherDataCache = completeData;
+            updateAllSections(completeData);
+            showMainContent();
+            
+        } catch (error) {
+            console.error('Error fetching weather:', error);
+            throw error;
+        }
+    }
+
+    // ========== FETCH OPEN-METEO DATA ==========
+    async function fetchOpenMeteoData(lat, lon) {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,apparent_temperature&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,soil_temperature_0cm&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset,et0_fao_evapotranspiration&timezone=auto`;
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Open-Meteo API failed');
+        
+        return await response.json();
+    }
+
+    // ========== FALLBACK INSIGHTS ==========
+    function generateFallbackInsights(weatherData, location, userCrop) {
+        const current = weatherData.current;
+        const daily = weatherData.daily;
+        
+        let criticalAlert = {
+            message: `Monitor your ${userCrop} regularly in ${location}`,
+            severity: "info",
+            icon: "🌤️"
+        };
+        
+        if (current.precipitation > 20) {
+            criticalAlert = {
+                message: `${window.weatherTranslations.heavy_rain_alert} - ${window.weatherTranslations.delay_field_work} for ${userCrop}`,
+                severity: "danger",
+                icon: "🌧️"
+            };
+        } else if (current.temperature_2m > 35) {
+            criticalAlert = {
+                message: `${window.weatherTranslations.extreme_heat_alert} - ${window.weatherTranslations.irrigate_crops} for ${userCrop}`,
+                severity: "warning",
+                icon: "🔥"
+            };
+        }
+        
+        const tips = {
+            good_for: current.wind_speed_10m < 15 ? 
+                `${window.weatherTranslations.spraying_pesticides} for ${userCrop}` : 
+                `${window.weatherTranslations.field_maintenance} for ${userCrop}`,
+            best_time: window.weatherTranslations.morning_hours,
+            avoid: window.weatherTranslations.delay_field_work
+        };
+        
+        const hourlyAdvice = [
+            { time: "6:00", advice: `Start irrigation for ${userCrop}`, icon: "💧" },
+            { time: "10:00", advice: `Good time for ${userCrop} maintenance`, icon: "🌱" },
+            { time: "14:00", advice: "Avoid fieldwork - peak heat", icon: "🔥" },
+            { time: "18:00", advice: `Evening ${userCrop} inspection`, icon: "👀" }
+        ];
+        
+        return {
+            critical_alert: criticalAlert,
+            quick_tips: tips,
+            today_recommendation: `Check ${userCrop} health and water needs`,
+            hourly_advice: hourlyAdvice
+        };
+    }
+
+    // ========== UPDATE ALL SECTIONS ==========
+    function updateAllSections(data) {
+        updateSection1(data.openMeteo);
+        updateSection2(data.llmInsights || generateFallbackInsights(data.openMeteo, currentUserData?.location, currentUserData?.crop));
+        updateSection3(data.openMeteo, data.llmInsights);
+        updateSection4(data.openMeteo);
+        updateSection5(data.openMeteo);
+        updateLastUpdated();
+    }
+
+    // SECTION 1: Current Conditions
+    function updateSection1(weatherData) {
+        const current = weatherData.current;
+        const daily = weatherData.daily;
+        
+        document.getElementById('currentTemp').textContent = `${Math.round(current.temperature_2m)}°C`;
+        document.getElementById('feelsLike').textContent = `${window.weatherTranslations.feels_like} ${Math.round(current.apparent_temperature)}°C`;
+        
+        const condition = getWeatherCondition(current.weather_code);
+        document.getElementById('currentCondition').innerHTML = `
+            <i class="fas ${condition.icon} ${condition.color} text-lg mr-2"></i>
+            <span>${condition.text}</span>
+        `;
+        
+        document.getElementById('currentHumidity').textContent = `${current.relative_humidity_2m}%`;
+        document.getElementById('currentWind').textContent = `${Math.round(current.wind_speed_10m)} km/h`;
+        
+        const sunrise = new Date(daily.sunrise[0]);
+        const sunset = new Date(daily.sunset[0]);
+        document.getElementById('sunriseTime').textContent = sunrise.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        document.getElementById('sunsetTime').textContent = sunset.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
+
+    // SECTION 2: Farming Alerts & Tips
+    function updateSection2(llmData) {
+        const alert = llmData.critical_alert;
+        const tips = llmData.quick_tips;
+        
+        const alertBox = document.getElementById('criticalAlert');
+        alertBox.className = `${getAlertClass(alert.severity)} rounded-lg p-4 border-l-4 mb-4`;
+        alertBox.classList.remove('hidden');
+        
+        document.getElementById('alertIcon').textContent = alert.icon;
+        document.getElementById('alertTitle').textContent = getAlertTitle(alert.severity);
+        document.getElementById('alertMessage').textContent = alert.message;
+        
+        document.getElementById('goodFor').textContent = tips.good_for;
+        document.getElementById('bestTime').textContent = tips.best_time;
+        document.getElementById('avoidAction').textContent = tips.avoid;
+    }
+
+    // SECTION 3: Hourly Forecast
+    function updateSection3(weatherData, llmData) {
+        const hourly = weatherData.hourly;
+        const tbody = document.getElementById('hourlyForecast');
+        tbody.innerHTML = '';
+        
+        const hourlyAdviceMap = {};
+        if (llmData && llmData.hourly_advice) {
+            llmData.hourly_advice.forEach(item => {
+                const hour = parseInt(item.time.split(':')[0]);
+                hourlyAdviceMap[hour] = {
+                    advice: item.advice,
+                    icon: item.icon
+                };
+            });
+        }
+        
+        const timeSlots = [0, 4, 8, 12, 16, 20];
+        
+        timeSlots.forEach(hourOffset => {
+            const now = new Date();
+            const targetTime = new Date(now.getTime() + hourOffset * 60 * 60 * 1000);
+            const targetHour = targetTime.getHours();
+            const targetTimeStr = targetTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            const targetIndex = hourOffset;
+            if (targetIndex >= hourly.time.length) return;
+            
+            const temp = Math.round(hourly.temperature_2m[targetIndex]);
+            const rain = hourly.precipitation_probability[targetIndex];
+            const wind = Math.round(hourly.wind_speed_10m[targetIndex]);
+            
+            let advice = { advice: 'Normal farming activities', icon: '📝' };
+            
+            if (hourlyAdviceMap[targetHour]) {
+                advice = hourlyAdviceMap[targetHour];
+            }
+            
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            row.innerHTML = `
+                <td class="py-3 px-3 text-gray-800 font-medium">${targetTimeStr}</td>
+                <td class="py-3 px-3 text-gray-800">${temp}°C</td>
+                <td class="py-3 px-3 text-gray-800">${rain}%</td>
+                <td class="py-3 px-3 text-gray-800">${wind} km/h</td>
+                <td class="py-3 px-3">
+                    <div class="flex items-center">
+                        <span class="mr-2">${advice.icon}</span>
+                        <span class="text-sm text-gray-700">${advice.advice}</span>
+                    </div>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+    }
+
+    // SECTION 4: 7-Day Forecast
+    function updateSection4(weatherData) {
+        const daily = weatherData.daily;
+        const tbody = document.getElementById('weeklyForecast');
+        tbody.innerHTML = '';
+        
+        for (let i = 0; i < 7; i++) {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            
+            const rain = Math.round(daily.precipitation_sum[i] || 0);
+            const tempHigh = Math.round(daily.temperature_2m_max[i]);
+            const tempLow = Math.round(daily.temperature_2m_min[i]);
+            
+            const activity = getDailyFarmingActivity({
+                precipitation: rain,
+                tempHigh: tempHigh,
+                tempLow: tempLow
+            });
+            
+            row.innerHTML = `
+                <td class="py-3 px-3 text-gray-800 font-medium">${window.weatherTranslations.days[i]}</td>
+                <td class="py-3 px-3 text-gray-800">${tempHigh}° / ${tempLow}°</td>
+                <td class="py-3 px-3 text-gray-800">${rain}%</td>
+                <td class="py-3 px-3">
+                    <div class="flex items-center">
+                        <span class="text-sm">${activity}</span>
+                    </div>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        }
+    }
+
+    // SECTION 5: Agricultural Metrics
+    function updateSection5(weatherData) {
+        const current = weatherData.current;
+        const daily = weatherData.daily;
+        const hourly = weatherData.hourly;
+        
+        const soilTemp = hourly.soil_temperature_0cm[12] || current.temperature_2m;
+        document.getElementById('soilTemp').textContent = `${Math.round(soilTemp)}°C`;
+        
+        const et = daily.et0_fao_evapotranspiration[0] || 0;
+        document.getElementById('evapotranspiration').textContent = `${et.toFixed(1)} mm/day`;
+        
+        const sunrise = new Date(daily.sunrise[0]);
+        const sunset = new Date(daily.sunset[0]);
+        const sunshineHours = (sunset - sunrise) / (1000 * 60 * 60);
+        document.getElementById('sunshineHours').textContent = sunshineHours.toFixed(1);
+        
+        const baseTemp = 10;
+        const dailyGDD = Math.max(0, ((daily.temperature_2m_max[0] + daily.temperature_2m_min[0]) / 2) - baseTemp);
+        const gddKey = `gdd_accumulated_${currentUserData?.id || 'anonymous'}`;
+        const accumulatedGDD = parseFloat(localStorage.getItem(gddKey) || 0) + dailyGDD;
+        localStorage.setItem(gddKey, accumulatedGDD.toString());
+        document.getElementById('gddAccumulated').textContent = Math.round(accumulatedGDD);
+        
+        document.getElementById('minTemp').textContent = `${Math.round(daily.temperature_2m_min[0])}°C`;
+        
+        const risk = calculatePestRisk(current.relative_humidity_2m, current.temperature_2m);
+        document.getElementById('pestRisk').textContent = risk;
+    }
+
+    // ========== FIXED: IRRIGATION REMINDER ==========
+    function showIrrigationModal() {
+        if (!weatherDataCache || !currentUserData) {
+            showToast('Weather data not loaded yet', 'error');
+            return;
+        }
+        
+        const daily = weatherDataCache.openMeteo.daily;
+        const etToday = daily.et0_fao_evapotranspiration[0] || 0;
+        const rainNext3Days = daily.precipitation_sum.slice(0, 3).reduce((a, b) => a + b, 0);
+        
+        const userCrop = currentUserData?.crop || 'crops';
+        let recommendation = '';
+        let schedule = '';
+        
+        if (etToday > 5 && rainNext3Days < 5) {
+            recommendation = window.weatherTranslations.irrigate_today;
+            schedule = 'TODAY';
+        } else if (etToday > 3) {
+            recommendation = window.weatherTranslations.irrigate_within_2_days;
+            schedule = 'within 48 hours';
+        } else {
+            recommendation = window.weatherTranslations.no_urgent_irrigation;
+            schedule = 'in 3 days';
+        }
+        
+        document.getElementById('irrigationContent').innerHTML = `
+            <div>
+                <p class="text-gray-600 mb-4">{{ t('based_on_weather', user_language) }} ${userCrop}:</p>
+                <div class="space-y-3 mb-6">
+                    <div class="flex justify-between">
+                        <span class="text-gray-700">{{ t('todays_water_loss', user_language) }}:</span>
+                        <span class="font-medium">${etToday.toFixed(1)} mm</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-700">{{ t('next_3_days_rain', user_language) }}:</span>
+                        <span class="font-medium">${rainNext3Days.toFixed(1)} mm</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-700">{{ t('your_crop', user_language) }}:</span>
+                        <span class="font-medium">${userCrop}</span>
+                    </div>
+                </div>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <h4 class="font-bold text-green-800 mb-2">💧 {{ t('recommendation', user_language) }}</h4>
+                    <p class="text-green-700">${recommendation}</p>
+                </div>
+                <div class="mt-6">
+                    <button onclick="setIrrigationReminder()" class="w-full bg-leaf text-white py-2 rounded-lg hover:bg-green-700 transition-smooth">
+                        {{ t('set_reminder', user_language) }}
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        showModal('irrigationModal');
+    }
+
+    function setIrrigationReminder() {
+        const userCrop = currentUserData?.crop || 'crops';
+        
+        const reminder = {
+            id: Date.now(),
+            crop: userCrop,
+            location: currentUserData?.location,
+            createdAt: new Date().toISOString(),
+            completed: false
+        };
+        
+        const reminders = JSON.parse(localStorage.getItem('irrigation_reminders') || '[]');
+        reminders.push(reminder);
+        localStorage.setItem('irrigation_reminders', JSON.stringify(reminders));
+        
+        showToast(`${window.weatherTranslations.reminder_set} ${userCrop}!`, 'success');
+        hideModal('irrigationModal');
+    }
+
+    // ========== FIXED: ASK CHATBOT WITH FULL CONTEXT ==========
+    function askChatbotAboutWeather() {
+        if (!weatherDataCache || !currentUserData) {
+            showToast('Weather data not loaded yet', 'error');
+            return;
+        }
+        
+        const current = weatherDataCache.openMeteo.current;
+        const daily = weatherDataCache.openMeteo.daily;
+        const userCrop = currentUserData?.crop || 'crops';
+        const location = currentUserData?.location || 'your farm';
+        
+        const weatherContext = {
+            temperature: current.temperature_2m,
+            feels_like: current.apparent_temperature,
+            humidity: current.relative_humidity_2m,
+            wind_speed: current.wind_speed_10m,
+            condition: getWeatherCondition(current.weather_code).text,
+            forecast_today: {
+                max: daily.temperature_2m_max[0],
+                min: daily.temperature_2m_min[0],
+                rain: daily.precipitation_sum[0]
+            },
+            forecast_tomorrow: {
+                max: daily.temperature_2m_max[1],
+                min: daily.temperature_2m_min[1],
+                rain: daily.precipitation_sum[1]
+            },
+            user_crop: userCrop,
+            location: location,
+            irrigation_advice: daily.et0_fao_evapotranspiration[0] > 5 ? 'Irrigate soon' : 'No urgent irrigation',
+            pest_risk: calculatePestRisk(current.relative_humidity_2m, current.temperature_2m)
+        };
+        
+        sessionStorage.setItem('weather_chat_context', JSON.stringify(weatherContext));
+        
+        const query = `I'm growing ${userCrop} in ${location}. Current weather: ${current.temperature_2m}°C, ${getWeatherCondition(current.weather_code).text}, humidity ${current.relative_humidity_2m}%. Tomorrow forecast: high ${daily.temperature_2m_max[1]}°C, low ${daily.temperature_2m_min[1]}°C, rain ${daily.precipitation_sum[1]}mm. What specific farming tasks should I do today and tomorrow for my ${userCrop}? Please consider irrigation, pest control, fertilizer application, and any weather precautions.`;
+        
+        sessionStorage.setItem('preset_chat_query', query);
+        window.location.href = 'chatbot.html';
+    }
+
+    // ========== FIXED: PLANTING CALENDAR ==========
+    function showPlantingCalendar() {
+        if (!currentUserData) {
+            showToast('User data not loaded', 'error');
+            return;
+        }
+        
+        const month = new Date().getMonth() + 1;
+        const season = getSeason(month);
+        const userCrop = currentUserData?.crop || 'General crops';
+        const location = currentUserData?.location || 'your area';
+        const state = currentUserData?.state || 'Telangana';
+        
+        const plantingWindow = getPlantingWindow(userCrop, state, month);
+        
+        document.getElementById('calendarContent').innerHTML = `
+            <div>
+                <div class="text-center mb-6">
+                    <div class="text-3xl text-leaf mb-2">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                   <h3 class="text-lg font-bold text-gray-800">${season} ${month}</h3>
+                    <p class="text-gray-600">${location}</p>
+                    <p class="text-gray-600 mt-1">{{ t('your_crop', user_language) }}: <span class="font-medium">${userCrop}</span></p>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-${plantingWindow.isOptimal ? 'green' : 'yellow'}-50 border border-${plantingWindow.isOptimal ? 'green' : 'yellow'}-200 rounded-lg p-4">
+                        <div class="flex items-start">
+                            <div class="text-2xl mr-3">${plantingWindow.isOptimal ? '✅' : '⚠️'}</div>
+                            <div>
+                                <h4 class="font-bold text-gray-800 mb-1">${plantingWindow.isOptimal ? '{{ t("optimal_planting_time", user_language) }}' : '{{ t("off_season_planting", user_language) }}'}</h4>
+                                <p class="text-gray-700 text-sm">${plantingWindow.message}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-medium text-gray-800 mb-2 flex items-center">
+                            <i class="fas fa-seedling text-leaf mr-2"></i>
+                            {{ t('recommended_to_sow_now', user_language) }}:
+                        </h4>
+                        <div class="text-gray-700">${plantingWindow.recommendedCrops.join(', ')}</div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-medium text-gray-800 mb-2 flex items-center">
+                            <i class="fas fa-tasks text-sky mr-2"></i>
+                            {{ t('current_maintenance', user_language) }}:
+                        </h4>
+                        <ul class="list-disc list-inside text-gray-700 space-y-1">
+                            ${plantingWindow.maintenanceTasks.map(task => `<li>${task}</li>`).join('')}
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-medium text-gray-800 mb-2 flex items-center">
+                            <i class="fas fa-clock text-sun mr-2"></i>
+                            {{ t('next_30_days', user_language) }}:
+                        </h4>
+                        <div class="text-gray-700">${plantingWindow.upcomingTasks}</div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-between">
+                    <button onclick="setPlantingReminder()" class="flex-1 mr-2 bg-leaf text-white py-2 rounded-lg hover:bg-green-700 transition-smooth">
+                        <i class="fas fa-bell mr-1"></i>{{ t('set_reminder', user_language) }}
+                    </button>
+                    <button onclick="askChatbotAboutPlanting()" class="flex-1 ml-2 bg-sky text-white py-2 rounded-lg hover:bg-blue-600 transition-smooth">
+                        <i class="fas fa-robot mr-1"></i>{{ t('ask_assistant', user_language) }}
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        showModal('calendarModal');
+    }
+
+    function getPlantingWindow(crop, state, currentMonth) {
+        const cropCalendars = {
+            'Rice': {
+                'Telangana': { start: 6, end: 8, optimal: 'June-August' },
+                'Andhra Pradesh': { start: 6, end: 8, optimal: 'June-August' },
+                'Punjab': { start: 5, end: 7, optimal: 'May-July' },
+                'default': { start: 6, end: 8, optimal: 'June-August' }
+            },
+            'Wheat': {
+                'Punjab': { start: 10, end: 12, optimal: 'October-December' },
+                'Haryana': { start: 10, end: 12, optimal: 'October-December' },
+                'Uttar Pradesh': { start: 10, end: 12, optimal: 'October-December' },
+                'default': { start: 10, end: 12, optimal: 'October-December' }
+            },
+            'Cotton': {
+                'Telangana': { start: 5, end: 7, optimal: 'May-July' },
+                'Maharashtra': { start: 6, end: 7, optimal: 'June-July' },
+                'Gujarat': { start: 5, end: 7, optimal: 'May-July' },
+                'default': { start: 5, end: 7, optimal: 'May-July' }
+            }
+        };
+        
+        const defaultCalendar = { start: 6, end: 8, optimal: 'June-August' };
+        
+        const cropCalendar = cropCalendars[crop] || cropCalendars['Rice'];
+        const regionCalendar = cropCalendar[state] || cropCalendar['default'] || defaultCalendar;
+        
+        const isOptimal = currentMonth >= regionCalendar.start && currentMonth <= regionCalendar.end;
+        
+        let recommendedCrops = [];
+        if (currentMonth >= 10 || currentMonth <= 2) {
+            recommendedCrops = ['Wheat', 'Chickpea', 'Mustard', 'Barley'];
+        } else if (currentMonth >= 6 && currentMonth <= 9) {
+            recommendedCrops = ['Rice', 'Maize', 'Cotton', 'Soybean'];
+        } else {
+            recommendedCrops = ['Vegetables', 'Pulses', 'Millets'];
+        }
+        
+        let maintenanceTasks = [];
+        if (isOptimal) {
+            maintenanceTasks = [
+                'Prepare field with proper tilth',
+                'Apply basal dose of fertilizer',
+                'Ensure adequate irrigation',
+                'Treat seeds before sowing'
+            ];
+        } else if (currentMonth > regionCalendar.end) {
+            maintenanceTasks = [
+                'Monitor crop growth',
+                'Check for pest infestation',
+                'Apply second dose of fertilizer',
+                'Plan for harvest'
+            ];
+        } else {
+            maintenanceTasks = [
+                'Complete field preparation',
+                'Arrange quality seeds',
+                'Test soil moisture',
+                'Clean irrigation channels'
+            ];
+        }
+        
+        return {
+            isOptimal: isOptimal,
+            message: isOptimal ? 
+                `Perfect time to plant ${crop} in ${state}. Optimal window: ${regionCalendar.optimal}` :
+                `${crop} planting window is ${regionCalendar.optimal} in ${state}. Consider other crops for now.`,
+            recommendedCrops: recommendedCrops,
+            maintenanceTasks: maintenanceTasks,
+            upcomingTasks: isOptimal ?
+                'Sowing, fertilizer application, light irrigation' :
+                'Field preparation, seed selection, equipment maintenance'
+        };
+    }
+
+    function setPlantingReminder() {
+        const userCrop = currentUserData?.crop || 'crops';
+        const reminder = {
+            id: Date.now(),
+            type: 'planting',
+            crop: userCrop,
+            createdAt: new Date().toISOString(),
+            completed: false
+        };
+        
+        const reminders = JSON.parse(localStorage.getItem('farm_reminders') || '[]');
+        reminders.push(reminder);
+        localStorage.setItem('farm_reminders', JSON.stringify(reminders));
+        
+        showToast(`🌱 Planting reminder set for ${userCrop}!`, 'success');
+        hideModal('calendarModal');
+    }
+
+    function askChatbotAboutPlanting() {
+        const userCrop = currentUserData?.crop || 'crops';
+        const location = currentUserData?.location || 'your farm';
+        const month = new Date().getMonth() + 1;
+        const season = getSeason(month);
+        
+        const query = `I want to plant ${userCrop} in ${location} during ${season} season (month ${month}). Is this a good time? What are the best varieties, sowing methods, spacing requirements, and expected yield? Also, what precautions should I take?`;
+        
+        sessionStorage.setItem('preset_chat_query', query);
+        window.location.href = 'chatbot.html';
+    }
+
+    // ========== TOAST NOTIFICATION SYSTEM ==========
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 animate-slide-up ${
+            type === 'success' ? 'bg-green-500 text-white' :
+            type === 'error' ? 'bg-red-500 text-white' :
+            'bg-blue-500 text-white'
+        }`;
+        toast.innerHTML = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ========== HELPER FUNCTIONS ==========
+    function getWeatherCondition(code) {
+        if (code === 0) return { text: window.weatherTranslations.condition_clear_sky, icon: "fa-sun", color: "text-sun" };
+        if (code === 1) return { text: window.weatherTranslations.condition_mainly_clear, icon: "fa-sun", color: "text-sun" };
+        if (code === 2) return { text: window.weatherTranslations.condition_partly_cloudy, icon: "fa-cloud-sun", color: "text-sun" };
+        if (code === 3) return { text: window.weatherTranslations.condition_overcast, icon: "fa-cloud", color: "text-sky" };
+        if (code >= 45 && code <= 48) return { text: window.weatherTranslations.condition_foggy, icon: "fa-smog", color: "text-gray-400" };
+        if (code >= 51 && code <= 67) return { text: window.weatherTranslations.condition_rainy, icon: "fa-cloud-rain", color: "text-water-blue" };
+        if (code >= 71 && code <= 77) return { text: window.weatherTranslations.condition_snowy, icon: "fa-snowflake", color: "text-sky" };
+        if (code >= 80 && code <= 82) return { text: window.weatherTranslations.condition_rain_showers, icon: "fa-cloud-showers-heavy", color: "text-water-blue" };
+        if (code >= 95 && code <= 99) return { text: window.weatherTranslations.condition_thunderstorm, icon: "fa-bolt", color: "text-yellow-500" };
+        return { text: window.weatherTranslations.condition_unknown, icon: "fa-question", color: "text-gray-400" };
+    }
+
+    function getAlertClass(severity) {
+        switch(severity) {
+            case 'danger': return 'alert-danger';
+            case 'warning': return 'alert-warning';
+            case 'info': return 'alert-info';
+            case 'success': return 'alert-success';
+            default: return 'alert-info';
+        }
+    }
+
+    function getAlertTitle(severity) {
+        switch(severity) {
+            case 'danger': return window.weatherTranslations.critical_alert;
+            case 'warning': return window.weatherTranslations.warning;
+            case 'info': return window.weatherTranslations.information;
+            case 'success': return window.weatherTranslations.good_news;
+            default: return window.weatherTranslations.information;
+        }
+    }
+
+    function getDailyFarmingActivity(dayData) {
+        if (dayData.precipitation > 20) return `⚠️ ${window.weatherTranslations.delay_field_work}`;
+        if (dayData.precipitation > 5) return `🌧️ Light rain - Plan indoor tasks`;
+        if (dayData.tempHigh > 35) return `🌡️ Hot - ${window.weatherTranslations.irrigate_crops}`;
+        if (dayData.tempLow < 10) return `❄️ Cool morning - Delay sensitive tasks`;
+        return `✅ ${window.weatherTranslations.field_maintenance}`;
+    }
+
+    function calculatePestRisk(humidity, temp) {
+        if (humidity > 80 && temp > 25) return window.weatherTranslations.risk_high;
+        if (humidity > 70 || temp > 30) return window.weatherTranslations.risk_medium;
+        return window.weatherTranslations.risk_low;
+    }
+
+    function getSeason(month) {
+        if (month >= 10 || month <= 2) return 'Rabi';
+        if (month >= 7 && month <= 9) return 'Kharif';
+        return 'Zaid';
+    }
+
+    // ========== AUTHENTICATION HELPER ==========
+    async function authFetch(url, options = {}) {
+        try {
+            const response = await fetch(`http://localhost:5001${url}`, {
+                ...options,
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    ...options.headers
+                }
+            });
+            
+            return response;
+        } catch (error) {
+            console.error('Network error:', error);
+            return {
+                ok: false,
+                status: 0,
+                json: async () => ({ error: 'Network error' })
+            };
+        }
+    }
+
+    // ========== UI STATE MANAGEMENT ==========
+    function showLoadingState() {
+        document.getElementById('loadingState').classList.remove('hidden');
+        document.getElementById('errorState').classList.add('hidden');
+        document.getElementById('mainContent').classList.add('hidden');
+        document.getElementById('locationPrompt').classList.add('hidden');
+    }
+
+    function showErrorState() {
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('errorState').classList.remove('hidden');
+        document.getElementById('mainContent').classList.add('hidden');
+        document.getElementById('locationPrompt').classList.add('hidden');
+    }
+
+    function showMainContent() {
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('errorState').classList.add('hidden');
+        document.getElementById('mainContent').classList.remove('hidden');
+        document.getElementById('locationPrompt').classList.add('hidden');
+    }
+
+    function showLocationPrompt() {
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('errorState').classList.add('hidden');
+        document.getElementById('mainContent').classList.add('hidden');
+        document.getElementById('locationPrompt').classList.remove('hidden');
+    }
+
+    function updateLastUpdated() {
+        const now = new Date();
+        document.getElementById('lastUpdated').textContent = now.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function showModal(modalId) {
+        document.getElementById(modalId).classList.remove('hidden');
+    }
+
+    function hideModal(modalId) {
+        document.getElementById(modalId).classList.add('hidden');
+    }
+
+    function refreshWeatherPage() {
+        const btn = document.getElementById('refreshPageBtn');
+        const originalHTML = btn.innerHTML;
+        
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> {{ t('refreshing', user_language) }}`;
+        btn.disabled = true;
+        
+        if (currentUserData && currentUserData.id) {
+            localStorage.removeItem(`weather_cache_${currentUserData.id}`);
+        }
+        
+        setTimeout(() => {
+            loadWeatherPage();
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }, 1000);
+    }
+
+    function retryLoading() {
+        loadWeatherPage();
+    }
+
+    function goToDashboard() {
+        window.location.href = 'dashboard.html';
+    }
+
+    // Make functions global
+    window.refreshWeatherPage = refreshWeatherPage;
+    window.retryLoading = retryLoading;
+    window.showIrrigationModal = showIrrigationModal;
+    window.askChatbotAboutWeather = askChatbotAboutWeather;
+    window.showPlantingCalendar = showPlantingCalendar;
+    window.hideModal = hideModal;
+    window.setIrrigationReminder = setIrrigationReminder;
+    window.setPlantingReminder = setPlantingReminder;
+    window.askChatbotAboutPlanting = askChatbotAboutPlanting;
+    window.goToDashboard = goToDashboard;
+    window.authFetch = authFetch;
+</script>
+{% endblock %}  
